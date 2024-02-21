@@ -1,65 +1,130 @@
 package com.example.application.views.list;
 
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.Image;
-import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.router.PageTitle;
-import com.vaadin.flow.router.Route;
-import com.vaadin.flow.theme.lumo.LumoUtility.Margin;
+import com.example.application.data.Company;
+import com.example.application.data.Contact;
+import com.example.application.data.Status;
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.ComponentEvent;
+import com.vaadin.flow.component.ComponentEventListener;
+import com.vaadin.flow.component.Key;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.combobox.ComboBox;
+import com.vaadin.flow.component.formlayout.FormLayout;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.binder.BeanValidationBinder;
+import com.vaadin.flow.data.binder.Binder;
+import com.vaadin.flow.data.binder.ValidationException;
+import com.vaadin.flow.shared.Registration;
 
-@PageTitle("Contacts | Vaadin CRM")
-@Route(value = "")
-public class ListView extends VerticalLayout {
+import java.util.List;
 
-    Grid<Contact> grid = new Grid<>(Contact.class);
-    TextField filterText = new TextField();
+public class ContactForm extends FormLayout {
 
-    public ListView() {
-        //css class name
-        addClassName("list-view");
-        // view the same size as the entire browser window
-        setSizeFull();
+    //binding between model object and the UI component/ use validate annotations
+    Binder<Contact> binder = new BeanValidationBinder<>(Contact.class);
+    TextField firstName = new TextField("First name");
+    TextField lastName = new TextField("Last name");
+    TextField email = new TextField("Email");
+    ComboBox<Status> status = new ComboBox<>("Status");
+    ComboBox<Company> company = new ComboBox<>("Company");
 
-        configureGrid();
+    Button save = new Button("Save");
+    Button delete = new Button("Delete");
+    Button cancel = new Button("Cancel");
+    private Contact contact;
+
+    public ContactForm(List<Company> companies, List<Status> statuses) {
+        addClassName("contact-form");
+        binder.bindInstanceFields(this);
+
+        company.setItems(companies);
+        company.setItemLabelGenerator(Company::getName);
+
+        status.setItems(statuses);
+        status.setItemLabelGenerator(Status::getName);
 
         add(
-                getToolbar(),
-                grid
+                firstName,
+                lastName,
+                email,
+                company,
+                status,
+                createButtonLayout()
         );
-//        Button button = new Button("click me");
-//        TextField name = new TextField("Name");
-//
-//        HorizontalLayout hl = new HorizontalLayout(name,button);
-//        hl.setDafaultVerticalComponentAlignment(Alignment.BASELINE);
-//
-//        button.addClickListner(click->Notification.show("Hallo, " + name.getValue()));
-//
-//        add(hl);
     }
 
-    private Component getToolbar(){
-        filterText.setPlaceholder("Filter by name..");
-        filterText.setCleanButtonVisible(True);
-        //wait for the user to stop typing for a little while
-        filterText.setValueChangeMode(ValueChangeMode.LAZY);
+    //api used from the view to set Contact
+    public void setContact(Contact contact){
+        this.contact = contact;
+        binder.readBean(contact);
+    }
+    private Component createButtonLayout(){
+        save.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        delete.addThemeVariants(ButtonVariant.LUMO_ERROR);
+        cancel.addThemeVariants(ButtonVariant.LUMO_TERTIARY);
 
-        Button addContactButton = new Button("click me");
-        HorizontalLayout toolbar = new HorizontalLayout(filterText,addContactButton);
-        toolbar.addClassName("toolbar");
-        return toolbar;
+        save.addClickListener(event->validateAndSave());
+        delete.addClickListener(event->fireEvent(new DeleteEvent(this,contact)));
+        cancel.addClickListener(event->fireEvent(new CloseEvent(this)));
+        save.addClickShortcut(Key.ENTER);
+        cancel.addClickShortcut(Key.ESCAPE);
+
+        return new HorizontalLayout(save,delete,cancel);
     }
 
-    private void configureGrid(){
-        grid.addClassName("contact-grid");
-        grid.setSizeFull();
-        grid.setColumns("firstName", "lastName", "email");
-        //because company is an object
-        grid.addColumn(contact->contact.getStatus().getName()).setHeader("Status");
-        grid.addColumn(contact->contact.getCompany().getName()).setHeader("Company");
-        // all columns sized to fit the content inside of them
-        grid.getColumns.forEach(col.setAutoWidth(true));
+    private void validateAndSave(){
+        try{
+            binder.writeBean(contact);
+            fireEvent(new SaveEvent(this,contact));
+        }catch (ValidationException e){
+            e.printStackTrace();
+        }
+    }
 
+    // Events
+    public static abstract class ContactFormEvent extends ComponentEvent<ContactForm> {
+        private Contact contact;
+
+        protected ContactFormEvent(ContactForm source, Contact contact) {
+            super(source, false);
+            this.contact = contact;
+        }
+
+        public Contact getContact() {
+            return contact;
+        }
+    }
+
+    public static class SaveEvent extends ContactFormEvent {
+        SaveEvent(ContactForm source, Contact contact) {
+            super(source, contact);
+        }
+    }
+
+    public static class DeleteEvent extends ContactFormEvent {
+        DeleteEvent(ContactForm source, Contact contact) {
+            super(source, contact);
+        }
+
+    }
+
+    public static class CloseEvent extends ContactFormEvent {
+        CloseEvent(ContactForm source) {
+            super(source, null);
+        }
+    }
+
+    public Registration addDeleteListener(ComponentEventListener<DeleteEvent> listener) {
+        return addListener(DeleteEvent.class, listener);
+    }
+
+    public Registration addSaveListener(ComponentEventListener<SaveEvent> listener) {
+        return addListener(SaveEvent.class, listener);
+    }
+    public Registration addCloseListener(ComponentEventListener<CloseEvent> listener) {
+        return addListener(CloseEvent.class, listener);
     }
 
 }
